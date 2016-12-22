@@ -1,3 +1,4 @@
+var d = require('debug')('postcss-cli')
 var globby = require("globby");
 var resolve = require("resolve");
 var argv = require("yargs")
@@ -92,9 +93,9 @@ if (!inputFiles.length) {
   // use stdin if nothing else is specified
   inputFiles = [undefined];
 }
-if (inputFiles.length > 1 && !argv.dir && !argv.replace) {
-  throw 'Please specify either --replace or --dir [output directory] for your files';
-}
+// if (inputFiles.length > 1 && !argv.dir && !argv.replace) {
+//   throw 'Please specify either --replace or --dir [output directory] for your files';
+// }
 
 // load and configure plugin array
 var plugins = argv.use.map(function(name) {
@@ -149,6 +150,7 @@ if (argv.watch) {
   global.watchCSS = fsWatcher(inputFiles);
 }
 
+d(`compile each files [${inputFiles}]`)
 async.forEach(inputFiles, compile, onError);
 
 function fsWatcher(entryPoints) {
@@ -163,16 +165,19 @@ function fsWatcher(entryPoints) {
     opts.interval = argv.poll;
   }
 
+  d(`start watching ${watchedFiles}`)
   var watcher = require('chokidar').watch(watchedFiles, opts);
   // recompile if any watched file is modified
   // TODO: only recompile relevant entry point
   watcher.on('change', function() {
+    d('[event] change')
     async.forEach(entryPoints, compile, function(err) {
       return onError.call(this, err, true);
     });
   });
 
   return function updateWatchedFiles(files, entryPoint) {
+    d('#updateWatchedFiles')
     // update source files for current entry point
     entryPoint = entryPoint || null;
     index[entryPoint] = files;
@@ -189,6 +194,7 @@ function fsWatcher(entryPoints) {
 }
 
 function compile(input, fn) {
+  d('#compile', input)
   var output = argv.output;
   if (argv.dir) {
     output = path.join(argv.dir, path.basename(input));
@@ -200,8 +206,11 @@ function compile(input, fn) {
 }
 
 function processCSS(processor, input, output, fn) {
+  d('#processCSS')
   function doProcess(css, fn) {
+    d('#doProcess', input)
     function onResult(result) {
+      d('#onResult')
       if (typeof result.warnings === 'function') {
         result.warnings().forEach(function(w) { console.warn(w.toString()); });
       }
@@ -239,6 +248,7 @@ function processCSS(processor, input, output, fn) {
 
 function onError(err, keepAlive) { // XXX: avoid overloaded signature?
   if (err) {
+    d('#onError')
     if (err.message && typeof err.showSourceCode === 'function') {
       console.error(err.message, err.showSourceCode());
     } else {
@@ -251,6 +261,7 @@ function onError(err, keepAlive) { // XXX: avoid overloaded signature?
 }
 
 function writeResult (name, content, fn) {
+  d('#writeResult', name)
   var funcs = [
     async.apply(writeFile, name, content.css)
   ];
@@ -261,6 +272,7 @@ function writeResult (name, content, fn) {
 }
 
 function writeFile(name, content, fn) {
+  d('#writeFile', name)
   if (!name) {
     process.stdout.write(content);
     return fn();
@@ -270,6 +282,7 @@ function writeFile(name, content, fn) {
     if (err) {
       fn(err);
     } else {
+      d(`  fs.writeFile -> ${name} (${content})`)
       fs.writeFile(name, content, fn);
 
       if (argv.log) {
